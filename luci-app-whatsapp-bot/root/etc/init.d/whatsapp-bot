@@ -1,0 +1,35 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2024 Maizil41
+
+START=99
+
+start() {
+    echo "Starting whatsapp-bot"
+    cd /root/whatsapp-bot
+    node index.js > /tmp/log/whatsapp.log 2>&1 &
+    echo $! > /var/run/whatsapp-bot.pid
+}
+
+stop() {
+    echo "Stopping whatsapp-bot"
+    if [ -f /var/run/whatsapp-bot.pid ]; then
+        kill $(cat /var/run/whatsapp-bot.pid)
+        rm -f /var/run/whatsapp-bot.pid
+    else
+        echo "whatsapp-bot is not running."
+    fi
+}
+
+restart() {
+    enabled=$(uci get whatsapp-bot.@whatsapp_bot[0].enabled)
+    
+    if [ "$enabled" -eq 0 ]; then
+        echo "WhatsApp Bot is enabled, restarting..."
+        stop
+        sleep 1
+        start
+    else
+        echo "WhatsApp Bot is disabled, stopping..."
+        stop
+    fi
+}

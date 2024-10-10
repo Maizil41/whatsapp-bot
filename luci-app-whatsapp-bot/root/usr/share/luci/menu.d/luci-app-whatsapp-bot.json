@@ -1,0 +1,30 @@
+{
+	"admin/services/whatsapp": {
+		"title": "WhatsApp",
+		"order": 30,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"uci": { "whatsapp-bot": true }
+		}
+	},
+
+	"admin/services/whatsapp/setting": {
+		"title": "Whatsapp Settings",
+		"order": 10,
+		"action": {
+			"type": "cbi",
+			"path": "whatsapp/whatsapp"
+		}
+	},
+
+	"admin/services/whatsapp/logs": {
+		"title": "Whatsapp Logs",
+		"order": 20,
+		"action": {
+			"type": "cbi",
+			"path": "whatsapp/log"
+		}
+	}
+}

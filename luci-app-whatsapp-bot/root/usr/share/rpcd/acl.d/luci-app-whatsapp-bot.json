@@ -1,0 +1,11 @@
+{
+	"luci-app-whatsapp-bot": {
+		"description": "Grant UCI access for luci-app-whatsapp-bot",
+		"read": {
+			"uci": [ "whatsapp-bot" ]
+		},
+		"write": {
+			"uci": [ "whatsapp-bot" ]
+		}
+	}
+}

@@ -1,0 +1,5 @@
+
+config whatsapp_bot
+	option admin_number '628537268XXXX'
+	option enabled '0'
+

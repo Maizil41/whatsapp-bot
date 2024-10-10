@@ -1,0 +1,44 @@
+#!/bin/sh
+
+cd /root/whatsapp-bot/ || exit 1
+
+npm install || exit 1
+
+sleep 1
+
+mysql -u root -p'radius' radius <<EOF
+DROP TABLE IF EXISTS \`client\`;
+CREATE TABLE \`client\` (
+  \`id\` int(11) NOT NULL AUTO_INCREMENT,
+  \`username\` varchar(50) NOT NULL,
+  \`password\` varchar(255) NOT NULL,
+  \`whatsapp_number\` varchar(20) DEFAULT NULL,
+  \`telegram_id\` varchar(50) NOT NULL,
+  \`balance\` int(11) DEFAULT 0,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+
+DROP TABLE IF EXISTS \`topup\`;
+CREATE TABLE \`topup\` (
+  \`id\` varchar(10) NOT NULL,
+  \`user_id\` int(11) NOT NULL,
+  \`username\` varchar(50) NOT NULL,
+  \`amount\` int(11) NOT NULL,
+  \`status\` enum('Accept','Reject','Pending') NOT NULL,
+  \`date\` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+
+DELIMITER ;;
+
+CREATE TRIGGER \`before_insert_topup\` BEFORE INSERT ON \`topup\` FOR EACH ROW
+BEGIN
+    SET NEW.id = CONCAT('TRX', LPAD(FLOOR(RAND() * 999), 3, '0'));
+END;;
+
+DELIMITER ;
+EOF
+
+sleep 1
+
+rm -f /etc/uci-defaults/99-whatsapp-bot
+
