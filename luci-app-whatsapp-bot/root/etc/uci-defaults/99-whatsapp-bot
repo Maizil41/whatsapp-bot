@@ -6,6 +6,10 @@ npm install || exit 1
 
 sleep 1
 
+mysql -u root -pradius -e "ALTER TABLE billing_plans ADD planCode VARCHAR(255);" radius || exit 1
+
+sleep 1
+
 mysql -u root -p'radius' radius <<EOF
 DROP TABLE IF EXISTS \`client\`;
 CREATE TABLE \`client\` (
