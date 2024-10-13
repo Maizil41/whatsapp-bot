@@ -26,7 +26,7 @@ jobs:
           sudo -E apt-get clean > /dev/null 2>&1
           
           echo -e "\033[34m🔧 Configuring environment \033[0m"
-          PKG_NAME=$(basename ${{ github.repository }})
+          PKG_NAME=$(basename ${{ github.repository }}/tree/main/luci-app-whatsapp-bot)
           PKG_VERSION=$(grep -oP 'PKG_VERSION:=\K.*' Makefile)
           export TERM=xterm
           echo "PKG_VERSION=$PKG_VERSION" >> $GITHUB_ENV
