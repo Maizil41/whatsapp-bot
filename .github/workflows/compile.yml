@@ -1,89 +1,79 @@
-name: Build IPK
+name: Compile IPK
 
 on:
   push:
-    branches:
-      - master
     paths:
-      - 'Makefile'
+      - 'luci-app-whatsapp-bot/Makefile'
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build IPK
+    name: Compile IPK
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🔄 Checkout repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: 🛠️ Set up build environment
-        run: |
-          echo -e "\033[34m🔨 Preparing build environment \033[0m"
-          sudo -E apt-get update > /dev/null 2>&1
-          sudo -E apt-get install build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget > /dev/null 2>&1
-          sudo -E apt-get autoremove --purge > /dev/null 2>&1
-          sudo -E apt-get clean > /dev/null 2>&1
-          
-          echo -e "\033[34m🔧 Configuring environment \033[0m"
-          PKG_NAME=$(basename ${{ github.repository }}/tree/main/luci-app-whatsapp-bot)
-          PKG_VERSION=$(grep -oP 'PKG_VERSION:=\K.*' Makefile)
-          export TERM=xterm
-          echo "PKG_VERSION=$PKG_VERSION" >> $GITHUB_ENV
-          echo "PKG_NAME=$PKG_NAME" >> $GITHUB_ENV
-          echo -e "\033[34m\t📦 PKG_NAME:\033[37m $PKG_NAME \033[0m"
-          echo -e "\033[34m\t🔖 PKG_VERSION:\033[37m $PKG_VERSION \033[0m"
-          echo -e "\033[34m\t💻 TERM:\033[37m xterm \033[0m"
+    - name: Setup environment
+      run: |
+        sudo -E apt-get update > /dev/null 2>&1
+        sudo -E apt-get install build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget > /dev/null 2>&1
+        sudo -E apt-get autoremove --purge > /dev/null 2>&1
+        sudo -E apt-get clean > /dev/null 2>&1
+        wget https://downloads.openwrt.org/releases/23.05.5/targets/x86/64/openwrt-sdk-23.05.5-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz  > /dev/null 2>&1
+        tar xJf openwrt-sdk-23.05.5-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz  > /dev/null 2>&1
+        mv openwrt-sdk-23.05.5-x86-64_gcc-12.3.0_musl.Linux-x86_64 sdk  > /dev/null 2>&1
 
-      - name: 📦 Set up resources
-        run: |
-          echo -e "\033[34m🗂️ Downloading SDK OpenWRT \033[0m"
-          curl -s -L https://downloads.openwrt.org/releases/23.05.4/targets/x86/64/openwrt-sdk-23.05.4-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz -o sdk.tar.xz
-          mkdir sdk && tar -xf sdk.tar.xz -C sdk --strip-components=1
+    - name: Setup feeds
+      run: |
+        cd sdk
+        ./scripts/feeds update -a  > /dev/null 2>&1
+        ./scripts/feeds install -a  > /dev/null 2>&1
 
-          echo -e "\033[34m📦 Cloning $PKG_NAME package \033[0m"
-          git clone -q https://github.com/${{ github.repository }} sdk/package/${PKG_NAME}
-          chmod +x sdk/package/${PKG_NAME}/root/usr/share/speedtest/schedule
+    - name: Get Version
+      id: get_version
+      run: |
+        cd luci-app-whatsapp-bot
+        echo "whatsapp_bot=$(grep 'PKG_VERSION:=' Makefile | awk -F '=' '{print $2}' | tr -d ' ')" >> $GITHUB_OUTPUT
 
-      - name: 📡 Set up SDK feeds
-        run: |
-          echo -e "\033[34m🔍 Updating SDK feeds \033[0m"
-          cd sdk
-          ./scripts/feeds update -a > /dev/null 2>&1
+    - name: Prepare Package
+      run: |
+        cd sdk
+        mkdir -p package/luci-app-whatsapp-bot
+        cp -R ../luci-app-whatsapp-bot/* package/luci-app-whatsapp-bot/
 
-          echo -e "\033[34m🔗 Installing SDK feeds \033[0m"
-          ./scripts/feeds install -a > /dev/null 2>&1
+    - name: Compile IPK
+      run: |
+        cd sdk && make defconfig
+        sed -i 's/CONFIG_LUCI_SRCDIET=y/# CONFIG_LUCI_SRCDIET is not set/' .config
+        sed -i 's/CONFIG_LUCI_JSMIN=y/# CONFIG_LUCI_JSMIN is not set/' .config
+        sed -i 's/CONFIG_LUCI_CSSTIDY=y/# CONFIG_LUCI_CSSTIDY is not set/' .config
+        sed -i 's/# CONFIG_NO_STRIP is not set/CONFIG_NO_STRIP=y/' .config
+        sed -i 's/CONFIG_USE_STRIP=y/# CONFIG_USE_STRIP is not set/' .config
+        sed -i 's/CONFIG_USE_SSTRIP=y/# CONFIG_USE_SSTRIP is not set/' .config
+        (make package/luci-app-whatsapp-bot/compile V=s -j$(nproc) || echo "BUILD_FAILED=true" >> $GITHUB_ENV) > /dev/null 2>&1
+        
+    - name: Check Compile Failed
+      if: env.BUILD_FAILED != 'true'
+      run: |
+        mv bin/packages/x86_64/base/luci-app-whatsapp-bot*.ipk ../luci-app-whatsapp-bot_${{ steps.get_version.outputs.whatsapp_bot }}_all.ipk
+    
+    - name: Create Release
+      if: env.BUILD_FAILED != 'true'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      run: |
+        release_date=$(date +'%Y.%m.%d')
+        release_name="${{ steps.get_version.outputs.whatsapp_bot }}"
+        release_tag="${release_date}"
 
-      - name: ⚙️ Configure & compile IPK
-        run: |
-          echo -e "\033[34m🔧 Configuring SDK \033[0m"
-          cd sdk && make defconfig > /dev/null 2>&1
-          rm -rf feeds/luci/contrib/package/csstidy
-          sed -i '/^CONFIG_LUCI_JSMIN=/d' .config
-          sed -i '/^CONFIG_LUCI_CSSTIDY=/d' .config
+        gh release create "$release_tag" \
+          --title "$release_tag" \
+          --generate-notes=false
 
-          echo -e "\033[34m🔨 Compiling ${PKG_NAME} package \033[0m"
-          make package/${PKG_NAME}/{clean,compile} -j$(nproc) > /dev/null 2>&1
-
-          echo -e "\033[34m📦 Compilation completed: \033[0m"
-          PKG_PATH=$(find bin/packages/x86_64/luci/ -name 'luci-app-*.ipk')
-          PKG_FILE=$(basename $PKG_PATH)
-          echo "PKG_PATH=sdk/$PKG_PATH" >> $GITHUB_ENV
-          echo "PKG_FILE=$PKG_FILE" >> $GITHUB_ENV
-          echo -e "\033[34m\t📂 Package path:\033[37m $PKG_PATH \033[0m"
-          echo -e "\033[34m\t📄 Package file:\033[37m $PKG_FILE \033[0m"
-
-      - name: 🚀 Generate new tag & release
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          name: ${{ env.PKG_NAME }}
-          tag_name: ${{ env.PKG_VERSION }}
-          draft: false
-          prerelease: false
-          files: ${{ env.PKG_PATH }}
-          body: |
-            ### Changelog ${{ env.PKG_VERSION }}:
-
-            **📦 New build of ${{ env.PKG_NAME }}**
+    - name: Upload IPK
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      run: |
+        gh release upload ${{ steps.get_version.outputs.whatsapp_bot }} \
+          ./luci-app-whatsapp-bot_${{ steps.get_version.outputs.whatsapp_bot }}_all.ipk
